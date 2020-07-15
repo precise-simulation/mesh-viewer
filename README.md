@@ -17,6 +17,7 @@ start both the GUI and application.
     python meshviewer_mpl_tk.py
 
 or
+
     python meshviewer_plotly_cef_tk.py
 
 # Dependencies
