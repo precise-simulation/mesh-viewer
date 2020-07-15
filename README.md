@@ -2,14 +2,38 @@ Mesh Viewer
 -----------
 
 **Mesh Viewer** is a simple STL/OBJ CAD geometry viewer prototype
-using Matplotlib/Tkinter and a Model View Controller (MVC) design.
+  using the Tkinter GUI framework with a Model View Controller (MVC)
+  design, and either Matplotlib/mplot3d or
+  [Plotly](https://www.featool.com/web-plots)/WebGL visualization
+  backends.
 
 ![Mesh Viewer screenshot](https://raw.githubusercontent.com/precise-simulation/mesh-viewer/master/meshviewer-screenshot.jpg)
 
 # Installation and Use
 
-Simply run the _meshviewer.py_ Python script should start the
-application and GUI (requires _matplotlib_).
+Simply downloading and running the corresponding Python scripts should
+start both the GUI and application.
+
+    python meshviewer_mpl_tk.py
+
+or
+    python meshviewer_plotly_cef_tk.py
+
+# Dependencies
+
+Python with the following libraries:
+
+- [matplotlib](https://matplotlib.org) for the matplotlib version
+- [cefpython](https://github.com/cztomczak/cefpython) for the plotly version (as well as internet connection to download the plotly javascript library)
+- Optionally [numpy](https://numpy.org) and [numpy-stl](https://github.com/WoLpH/numpy-stl) for reading binary STL format
+
+# Notes
+
+This is just a simple prototype/proof-of-concept and not intended to
+be a full fledged application. If you are interested in custom CAE and
+simulation tools such as this app and
+[FEATool Multiphysics](https://www.featool.com) please feel free to
+get in touch with [Precise Simulation](https://www.precisesimulation.com).
 
 # License
 

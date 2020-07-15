@@ -1,12 +1,22 @@
 """STL/OBJ Python Mesh Viewer prototype with Matplotlib/Tkinter
 using a Model View Controller (MVC) design.
 
-:license: AGPL v3, see LICENSE for more details.
+This is just a simple prototype/proof-of-concept and not intended to
+be a full fledged application. If you are interested in custom CAE and
+simulation tools such as this app and
+[FEATool Multiphysics](https://www.featool.com) please feel free to
+get in touch with [Precise Simulation](https://www.precisesimulation.com).
+
+:license: AGPL v3, see LICENSE for more details or contact
+          Precise Simulation for alternative licensing options.
 :copyright: 2020 Precise Simulation Ltd.
 
 """
 
-import tkinter as tk
+try:
+    import tkinter as tk
+except ImportError:
+    import Tkinter as tk
 import tkinter.ttk as ttk
 import tkinter.font as tkfont
 from tkinter.filedialog import askopenfilename
@@ -37,7 +47,7 @@ class Model():
     def load_file(self, file_name):
         '''Load mesh from file
         '''
-        if file_name.endswith(('.stl','.stla')):
+        if file_name.lower().endswith(('.stl','.stla')):
             mesh = self.load_stl(file_name)
 
         elif file_name.lower().endswith('.obj'):
@@ -46,15 +56,22 @@ class Model():
         self.data.append(mesh)
 
     def load_stl(self, file_name):
-        '''Load ASCII STL CAD file
+        '''Load STL CAD file
         '''
-        with open(file_name, 'r') as f:
-            data = f.read()
+        try:
+            with open(file_name, 'r') as f:
+                data = f.read()
+
+        except:
+            return self.load_stl_with_numpy_stl(file_name)
 
         vertices = []
         faces = []
         v = []
-        for line in data.splitlines():
+        for i, line in enumerate(data.splitlines()):
+            if i == 0 and line.strip() != 'solid':
+                raise ValueError('Not valid ASCII STL file.')
+
             line_data = line.split()
 
             if line_data[0]=='facet':
@@ -71,6 +88,14 @@ class Model():
 
         return Mesh(vertices, faces)
 
+    def load_stl_with_numpy_stl(self, file_name):
+        import numpy as np
+        from stl import mesh
+        msh = mesh.Mesh.from_file(file_name)
+        vertices = np.concatenate(msh.vectors)
+        n_faces = len(msh.vectors)
+        faces = np.array(range(3*n_faces)).reshape(n_faces,3) + 1
+        return Mesh(vertices, faces)
 
     def load_obj(self, file_name):
         '''Load ASCII Wavefront OBJ CAD file
@@ -97,10 +122,12 @@ class Model():
         return Mesh(vertices, faces)
 
     def get_bounding_box(self):
-        bbox = []
-        for i in range(len(self.data[0].vertices[0])):
-            x_i = [mesh.bounding_box[i] for mesh in self.data]
-            bbox.append([min(x_i), max(x_i)])
+        bbox = self.data[0].bounding_box
+        for mesh in self.data[1:]:
+            for i in range(len(bbox)):
+                x_i = mesh.bounding_box[i]
+                bbox[i][0] = min([bbox[i][0], min(x_i)])
+                bbox[i][1] = max([bbox[i][1], max(x_i)])
 
         return bbox
 
@@ -222,7 +249,7 @@ class Controller():
         f1 = ttk.Frame(root)
         f1.pack(side=tk.TOP, anchor=tk.W)
 
-        toolbar = [ tk.Button(f1, text="Open", command=self.open),
+        toolbar = [ tk.Button(f1, text="Open"),
                     tk.Button(f1, text="XY", command=view.xy),
                     tk.Button(f1, text="XZ", command=view.xz),
                     tk.Button(f1, text="YZ", command=view.yz),
@@ -236,6 +263,8 @@ class Controller():
         setMaxWidth(options, o1)
         o1.pack()
         toolbar.append(f2)
+
+        toolbar[0].config(command=lambda: self.open(var))
 
         [obj.pack(side=tk.LEFT, anchor=tk.W) for obj in toolbar]
 
@@ -266,13 +295,13 @@ class Controller():
     def render(self):
         self.root.mainloop()
 
-    def open(self):
+    def open(self, var):
         file_name = askopenfilename( title = "Select file to open",
                                      filetypes = (("CAD files","*.obj;*.stl"),
                                                   ("all files","*.*")) )
         self.model.clear()
         self.model.load_file(file_name)
-        self.view.plot()
+        self.view.plot(var.get())
 
     def exit(self):
         self.model.clear()
