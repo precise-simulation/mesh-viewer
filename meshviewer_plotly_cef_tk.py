@@ -26,8 +26,7 @@ import ctypes
 import sys
 import platform
 
-WIDTH  = 640
-HEIGHT = 550
+CEF_DELAY = 100
 
 
 class Model():
@@ -180,30 +179,29 @@ class View():
 
         if model is None:
             model = Model()
-        self.model = model
 
-        self.figure = None
-        self.axes = None
-        self.canvas = None
-        self.toolbar = None
+        self.model = model
+        self.browserframe = None
+        self.browser = None
 
     def clear(self):
         s_cmd = 'Plotly.deleteTraces("canvas", [...data.keys()]);'
-        self.figure.browser.ExecuteJavascript(s_cmd)
+        self.browser.ExecuteJavascript(s_cmd)
 
     def update(self):
         s_cmd = self.get_plot_cmd()
-        self.figure.browser.ExecuteJavascript(s_cmd)
+        self.browser.ExecuteJavascript(s_cmd)
 
     def plot(self, types="solid + wireframe"):
         self.clear()
         s_cmd = self.get_model_data(types)
-        self.figure.browser.ExecuteJavascript(s_cmd)
+        self.browser.ExecuteJavascript(s_cmd)
         self.update()
 
     def get_plot_cmd(self):
         s_layout = '{"showlegend": false, "scene": {"aspectratio": {"x": 1, "y": 1, "z": 1}, "aspectmode": "manual"}}'
-        s = 'Plotly.plot("canvas", data, ' + s_layout + ', {});'
+        s_config = '{"responsive": true}'
+        s = 'Plotly.plot("canvas", data, ' + s_layout + ', ' + s_config +');'
         return s
 
     def get_model_data(self, types="solid + wireframe"):
@@ -259,27 +257,52 @@ class View():
             '"line": {"color": "rgb(0,0,0)", "width": 2, "dash": "solid", "showscale": false}}'
         return s
 
+    def get_plotly_html_canvas(self):
+        s_title = 'Mesh Viewer'
+
+        s_body = '<div id="load">Loading Plotly...</div>' + \
+            '<div id="canvas" style="width:100vw; height:100vh;" class="plotly-graph-div"></div>' + \
+            '<script src="https://cdn.plot.ly/plotly-latest.min.js" charset="utf-8"></script>' + \
+            '<script>' + \
+            self.get_model_data() + \
+            'var elem = document.getElementById("load"); elem.parentNode.removeChild(elem);' + \
+            self.get_plot_cmd() + \
+            '</script>'
+
+        s_html = '<!DOCTYPE HTML><html"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><title>' + s_title +'</title></head><body style="margin:0">' + \
+            s_body + '</body></html>'
+
+        return s_html
+
+    def set_html(self, s_html):
+
+        s_cmd = 'document.open("text/html");' + \
+            'document.write(\'' + s_html + '\');' + \
+            'document.close();'
+
+        self.browser.ExecuteJavascript(s_cmd)
+
     def xy(self):
         bbox = self.model.get_bounding_box()
         d = 2*(bbox[2][1] - bbox[2][0])
         s_cmd = 'Plotly.relayout("canvas", {"scene":{"camera":{"eye":{"x":0, "y":0, "z":' + str(d) + '}}}});'
-        self.figure.browser.ExecuteJavascript(s_cmd)
+        self.browser.ExecuteJavascript(s_cmd)
 
     def xz(self):
         bbox = self.model.get_bounding_box()
         d = 2*(bbox[1][1] - bbox[1][0])
         s_cmd = 'Plotly.relayout("canvas", {"scene":{"camera":{"eye":{"x":0, "y":' + str(d) + ', "z":0}}}});'
-        self.figure.browser.ExecuteJavascript(s_cmd)
+        self.browser.ExecuteJavascript(s_cmd)
 
     def yz(self):
         bbox = self.model.get_bounding_box()
         d = 2*(bbox[0][1] - bbox[0][0])
         s_cmd = 'Plotly.relayout("canvas", {"scene":{"camera":{"eye":{"x":' + str(d) + ', "y":0, "z":0}}}});'
-        self.figure.browser.ExecuteJavascript(s_cmd)
+        self.browser.ExecuteJavascript(s_cmd)
 
     def reset(self):
         s_cmd = 'Plotly.relayout("canvas", {"scene": {"aspectratio": {"x": 1, "y": 1, "z": 1}, "aspectmode": "manual"}});'
-        self.figure.browser.ExecuteJavascript(s_cmd)
+        self.browser.ExecuteJavascript(s_cmd)
 
 
 class Controller():
@@ -287,9 +310,9 @@ class Controller():
     def __init__(self, view=None):
 
         root = tk.Tk()
-        root.geometry(str(WIDTH) + "x" + str(HEIGHT))
-        root.resizable(False, False)
+        root.geometry("600x550")
         root.title("Mesh Viewer")
+        root.protocol("WM_DELETE_WINDOW", self.exit)
 
         if view is None:
             view = View(None, root)
@@ -319,8 +342,8 @@ class Controller():
         f3 = tk.Frame(root)
         f3.bind("<Configure>", self.on_configure)
         f3.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        view.figure = BrowserFrame(f3, view)
-        view.figure.pack(fill=tk.BOTH, expand=True)
+        view.browserframe = BrowserFrame(f3, view)
+        view.browserframe.pack(fill=tk.BOTH, expand=True)
 
         menubar = tk.Menu( root )
         file_menu = tk.Menu(menubar, tearoff=0)
@@ -346,14 +369,15 @@ class Controller():
         self.view.plot(var.get())
 
     def on_configure(self, event):
-        if self.view.figure:
-            width = event.width
-            height = event.height
-            self.view.figure.on_mainframe_configure(width, height)
+        if self.view.browserframe:
+            self.view.browserframe.on_mainframe_configure(event.width, event.height)
 
     def exit(self):
         self.model.clear()
         self.view.clear()
+        if self.view.browserframe:
+            self.view.browserframe.on_root_close()
+
         self.root.destroy()
         cef.Shutdown()
 
@@ -390,18 +414,11 @@ class App():
         self.controller.render()
 
 
-# Platforms
-WINDOWS = (platform.system() == "Windows")
-LINUX = (platform.system() == "Linux")
-MAC = (platform.system() == "Darwin")
-
 class BrowserFrame(tk.Frame):
 
-    def __init__(self, master, view=None, navigation_bar=None):
-        self.view = view
-        self.navigation_bar = navigation_bar
-        self.closing = False
+    def __init__(self, master, view=None):
         self.browser = None
+        self.view = view
         tk.Frame.__init__(self, master)
         self.bind("<FocusIn>", self.on_focus_in)
         self.bind("<FocusOut>", self.on_focus_out)
@@ -416,34 +433,14 @@ class BrowserFrame(tk.Frame):
         assert self.browser
         self.browser.SetClientHandler(LoadHandler(self))
         self.browser.SetClientHandler(FocusHandler(self))
-        self.set_start_url()
+        self.view.browser = self.browser
+        self.view.set_html(self.view.get_plotly_html_canvas())
         self.message_loop_work()
-
-    def set_start_url(self):
-        w = round(WIDTH*0.95)
-        h = round(HEIGHT*0.9)
-
-        s_body = '<div id="load">Loading Plotly...</div>' + \
-            '<div id="canvas" style="width: ' + str(w) + 'px; height: ' + str(h) + 'px;" class="plotly-graph-div"></div>' + \
-            '<script src="https://cdn.plot.ly/plotly-latest.min.js" charset="utf-8"></script>' + \
-            '<script>' + \
-            self.view.get_model_data() + \
-            'var elem = document.getElementById("load"); elem.parentNode.removeChild(elem);' + \
-            self.view.get_plot_cmd() + \
-            '</script>'
-
-        s_cmd = 'document.open("text/html");' + \
-            'document.write(\'<!DOCTYPE HTML><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><title>Mesh Viewer</title></head><body>' + \
-            s_body + \
-            '</body></html>\');document.close();'
-
-        self.browser.StopLoad()
-        self.browser.ExecuteJavascript(s_cmd)
 
     def get_window_handle(self):
         if self.winfo_id() > 0:
             return self.winfo_id()
-        elif MAC:
+        elif platform.system() == "Darwin":
             from AppKit import NSApp
             import objc
             return objc.pyobjc_id(NSApp.windows()[-1].contentView())
@@ -451,11 +448,8 @@ class BrowserFrame(tk.Frame):
             raise Exception("Couldn't obtain window handle")
 
     def message_loop_work(self):
-        try:
-            cef.MessageLoopWork()
-            self.after(10, self.message_loop_work)
-        except:
-            pass
+        cef.MessageLoopWork()
+        self.after(CEF_DELAY, self.message_loop_work)
 
     def on_configure(self, _):
         if not self.browser:
@@ -467,17 +461,14 @@ class BrowserFrame(tk.Frame):
 
     def on_mainframe_configure(self, width, height):
         if self.browser:
-            try:
-                if WINDOWS:
-                    ctypes.windll.user32.SetWindowPos(
-                        self.browser.GetWindowHandle(), 0,
-                        0, 0, width, height, 0x0002)
-                elif LINUX:
-                    self.browser.SetBounds(0, 0, width, height)
+            if platform.system() == "Windows":
+                ctypes.windll.user32.SetWindowPos(
+                    self.browser.GetWindowHandle(), 0,
+                    0, 0, width, height, 0x0002)
+            elif platform.system() == "Linux":
+                self.browser.SetBounds(0, 0, width, height)
 
-                self.browser.NotifyMoveOrResizeStarted()
-            except:
-                pass
+            self.browser.NotifyMoveOrResizeStarted()
 
     def on_focus_in(self, _):
         if self.browser:
@@ -490,11 +481,9 @@ class BrowserFrame(tk.Frame):
     def on_root_close(self):
         if self.browser:
             self.browser.CloseBrowser(True)
-            self.clear_browser_references()
-        self.destroy()
+            self.browser = None
 
-    def clear_browser_references(self):
-        self.browser = None
+        self.destroy()
 
 class LoadHandler(object):
 
@@ -522,6 +511,6 @@ class FocusHandler(object):
 if __name__ == "__main__":
 
     assert cef.__version__ >= "55.3", "CEF Python v55.3+ required to run this"
-    sys.excepthook = cef.ExceptHook   # Shutdown all CEF processes on error
+    sys.excepthook = cef.ExceptHook
     app = App()
     app.start()
