@@ -26,7 +26,9 @@ import ctypes
 import sys
 import platform
 
-CEF_DELAY = 100
+g_multi_threaded = True
+if not platform.system() == "Windows":
+    g_multi_threaded = False
 
 
 class Model():
@@ -357,7 +359,10 @@ class Controller():
         self.model = view.model
 
     def render(self):
-        cef.Initialize()
+        settings = {
+            "multi_threaded_message_loop": g_multi_threaded,
+        }
+        cef.Initialize(settings=settings)
         self.root.mainloop()
 
     def open(self, var):
@@ -375,11 +380,14 @@ class Controller():
     def exit(self):
         self.model.clear()
         self.view.clear()
+        if g_multi_threaded:
+            cef.Shutdown()
         if self.view.browserframe:
             self.view.browserframe.on_root_close()
 
         self.root.destroy()
-        cef.Shutdown()
+        if not g_multi_threaded:
+            cef.Shutdown()
 
 
 def setMaxWidth(stringList, element):
@@ -418,6 +426,7 @@ class BrowserFrame(tk.Frame):
 
     def __init__(self, master, view=None):
         self.browser = None
+        self.flag = 0
         self.view = view
         tk.Frame.__init__(self, master)
         self.bind("<FocusIn>", self.on_focus_in)
@@ -429,13 +438,38 @@ class BrowserFrame(tk.Frame):
         window_info = cef.WindowInfo()
         rect = [0, 0, self.winfo_width(), self.winfo_height()]
         window_info.SetAsChild(self.get_window_handle(), rect)
-        self.browser = cef.CreateBrowserSync(window_info, url='about:blank')
-        assert self.browser
-        self.browser.SetClientHandler(LoadHandler(self))
-        self.browser.SetClientHandler(FocusHandler(self))
-        self.view.browser = self.browser
-        self.view.set_html(self.view.get_plotly_html_canvas())
-        self.message_loop_work()
+        if g_multi_threaded:
+            cef.PostTask(cef.TID_UI,
+                         self.create_browser,
+                         window_info,
+                         {},
+                         "about:blank")
+        else:
+            self.create_browser(window_info=window_info,
+                                settings={},
+                                url="about:blank")
+
+        self.browser_setup()
+
+    def create_browser(self, window_info, settings, url):
+        assert(cef.IsThread(cef.TID_UI))
+        self.browser = cef.CreateBrowserSync(window_info=window_info,
+                                             settings=settings,
+                                             url=url)
+
+    def browser_setup(self):
+        """Wait for browser object before calling setup. """
+        if self.browser is None:
+            self.after(10, self.browser_setup)
+        elif self.flag == 0:
+            assert self.browser
+            self.flag = -1;
+            self.browser.SetClientHandler(LoadHandler(self))
+            self.browser.SetClientHandler(FocusHandler(self))
+            self.view.browser = self.browser
+            self.view.set_html(self.view.get_plotly_html_canvas())
+            if not g_multi_threaded:
+                self.message_loop_work()
 
     def get_window_handle(self):
         if self.winfo_id() > 0:
@@ -449,7 +483,7 @@ class BrowserFrame(tk.Frame):
 
     def message_loop_work(self):
         cef.MessageLoopWork()
-        self.after(CEF_DELAY, self.message_loop_work)
+        self.after(10, self.message_loop_work)
 
     def on_configure(self, _):
         if not self.browser:
