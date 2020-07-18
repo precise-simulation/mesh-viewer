@@ -22,7 +22,7 @@ or
 
 [Releases](https://github.com/precise-simulation/mesh-viewer/releases)
 as stand-alone executables are available, and can be built using
-_Pyinstaller_ and the [build/build-exe.py](https://github.com/precise-simulation/mesh-viewer/blob/master/build/build-exe.py)
+_Pyinstaller_ and the [build/build.py](https://github.com/precise-simulation/mesh-viewer/blob/master/build/build-exe.py)
 script.
 
 # Dependencies

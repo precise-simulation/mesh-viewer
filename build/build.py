@@ -1,10 +1,11 @@
 """
 This is an example of using PyInstaller packager to build
-an executable for meshviewer with plotly/cef.
+stand-alone executable for meshviewer with plotly/cef.
 
 Adapted from https://github.com/cztomczak/cefpython/tree/master/examples/pyinstaller
 
 To package example type: `python build-pyinstaller.py`.
+Accepts optional command line arguments --debug and --onefile
 """
 
 import os
@@ -53,6 +54,10 @@ def main():
     env = os.environ
     if "--debug" in sys.argv:
         env["CEFPYTHON_PYINSTALLER_DEBUG"] = "1"
+
+    if "--onefile" in sys.argv:
+        env["CEFPYTHON_PYINSTALLER_ONEFILE"] = "1"
+
     sub = Popen(["pyinstaller", "--clean", "meshviewer_plotly_cef_tk.spec"], env=env)
     sub.communicate()
     rcode = sub.returncode
@@ -65,7 +70,10 @@ def main():
 
     # Make sure everything went fine
     curdir = os.path.dirname(os.path.abspath(__file__))
-    app_dir = os.path.join(curdir, "dist")
+    if "--onefile" in sys.argv:
+        app_dir = os.path.join(curdir, "dist")
+    else:
+        app_dir = os.path.join(curdir, "dist", APP)
     executable = os.path.join(app_dir, APP+EXE_EXT)
     if not os.path.exists(executable):
         print("Error: PyInstaller failed, main executable is missing: %s"

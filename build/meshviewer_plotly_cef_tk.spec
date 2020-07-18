@@ -13,6 +13,7 @@ from PyInstaller.archive.pyz_crypto import PyiBlockCipher
 
 # Constants
 DEBUG = os.environ.get("CEFPYTHON_PYINSTALLER_DEBUG", False)
+ONEFILE = os.environ.get("CEFPYTHON_PYINSTALLER_ONEFILE", False)
 
 # ----------------------------------------------------------------------------
 # Main
@@ -32,15 +33,32 @@ if not os.environ.get("PYINSTALLER_CEFPYTHON3_HOOK_SUCCEEDED", None):
 pyz = PYZ(a.pure,
           a.zipped_data)
 
-exe = EXE(pyz,
-          a.scripts,
-          a.binaries,
-          a.zipfiles,
-          a.datas,
-          name="meshviewer",
-          debug=DEBUG,
-          strip=False,
-          upx=False,
-          windowed=True,
-          console=DEBUG,
-          icon=False)
+if ONEFILE:
+    exe = EXE(pyz,
+              a.scripts,
+              a.binaries,
+              a.zipfiles,
+              a.datas,
+              name="meshviewer",
+              debug=DEBUG,
+              strip=False,
+              upx=False,
+              console=DEBUG,
+              icon=False)
+else:
+    exe = EXE(pyz,
+              a.scripts,
+              exclude_binaries=True,
+              name="meshviewer",
+              debug=DEBUG,
+              strip=False,
+              upx=False,
+              console=DEBUG)
+
+    COLLECT(exe,
+            a.binaries,
+            a.zipfiles,
+            a.datas,
+            strip=False,
+            upx=False,
+            name="meshviewer")
