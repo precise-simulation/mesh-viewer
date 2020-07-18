@@ -27,19 +27,24 @@ from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationTool
 from matplotlib.figure import Figure
 from mpl_toolkits import mplot3d
 
+import sys
+
 
 class Model():
 
-    def __init__(self, data=None):
+    def __init__(self, file_name=None):
 
-        # Define unit cube.
-        if data is None:
+        self.data = []
+        if file_name is None:
+            # Define unit cube.
             vertices = [[0,0,0], [1,0,0], [1,1,0], [0,1,0],
                         [0,0,1], [1,0,1], [1,1,1], [0,1,1]]
             faces = [[1,2,3,4], [1,2,6,5], [2,3,7,6], [3,4,8,7], [4,1,5,8], [5,6,7,8]]
             data = Mesh(vertices, faces)
 
-        self.data = [data]
+            self.data = [data]
+        else:
+            self.load_file(file_name)
 
     def clear(self):
         self.data = []
@@ -47,13 +52,11 @@ class Model():
     def load_file(self, file_name):
         '''Load mesh from file
         '''
-        if file_name.lower().endswith(('.stl','.stla')):
-            mesh = self.load_stl(file_name)
+        if file_name.lower().endswith(('.stl','.stla','.stlb')):
+            self.load_stl(file_name)
 
         elif file_name.lower().endswith('.obj'):
-            mesh = self.load_obj(file_name)
-
-        self.data.append(mesh)
+            self.load_obj(file_name)
 
     def load_stl(self, file_name):
         '''Load STL CAD file
@@ -62,9 +65,14 @@ class Model():
             with open(file_name, 'r') as f:
                 data = f.read()
 
-        except:
-            return self.load_stl_with_numpy_stl(file_name)
+            self.load_stl_ascii(data)
 
+        except:
+            self.load_stl_binary(file_name)
+
+    def load_stl_ascii(self, data):
+        '''Load ASCII STL CAD file
+        '''
         vertices = []
         faces = []
         v = []
@@ -86,16 +94,31 @@ class Model():
                     ind = 3*len(faces)+1
                     faces.append([ind, ind+1, ind+2])
 
-        return Mesh(vertices, faces)
+        self.data.append(Mesh(vertices, faces))
 
-    def load_stl_with_numpy_stl(self, file_name):
-        import numpy as np
-        from stl import mesh
-        msh = mesh.Mesh.from_file(file_name)
-        vertices = np.concatenate(msh.vectors)
-        n_faces = len(msh.vectors)
-        faces = np.array(range(3*n_faces)).reshape(n_faces,3) + 1
-        return Mesh(vertices, faces)
+    def load_stl_binary(self, file_name):
+        '''Load binary STL CAD file
+        '''
+        from struct import unpack
+        vertices = []
+        faces = []
+        with open(file_name, 'rb') as f:
+            header = f.read(80)
+            # name = header.strip()
+            n_tri = unpack('<I', f.read(4))[0]
+            for i in range(n_tri):
+                _normals = f.read(3*4)
+                for j in range(3):
+                    x = unpack('<f', f.read(4))[0]
+                    y = unpack('<f', f.read(4))[0]
+                    z = unpack('<f', f.read(4))[0]
+                    vertices.append([x, y, z])
+
+                j = 3*i + 1
+                faces.append([j, j+1, j+2])
+                _attr = f.read(2)
+
+        self.data.append(Mesh(vertices, faces))
 
     def load_obj(self, file_name):
         '''Load ASCII Wavefront OBJ CAD file
@@ -119,7 +142,7 @@ class Model():
 
                     faces.append(face)
 
-        return Mesh(vertices, faces)
+        self.data.append(Mesh(vertices, faces))
 
     def get_bounding_box(self):
         bbox = self.data[0].bounding_box
@@ -216,8 +239,9 @@ class View():
                     # Unknown plot type
                     return None
 
-        self.axes.auto_scale_xyz(*self.model.get_bounding_box())
-        self.update()
+        if len(self.model.data) >= 1:
+            self.axes.auto_scale_xyz(*self.model.get_bounding_box())
+            self.update()
 
     def xy(self):
         self.axes.view_init(elev=90, azim=-90)
@@ -281,7 +305,7 @@ class Controller():
 
         menubar = tk.Menu( root )
         file_menu = tk.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="Open...", command=self.open)
+        file_menu.add_command(label="Open...", command=lambda: self.open(var))
         file_menu.add_command(label="Exit", command=self.exit)
         menubar.add_cascade(label="File", menu=file_menu)
         root.config(menu=menubar)
@@ -324,8 +348,12 @@ def setMaxWidth(stringList, element):
 class App():
 
     def __init__(self, model=None, view=None, controller=None):
+        file_name = None
+        if len(sys.argv) >= 2:
+            file_name = sys.argv[1]
+
         if model is None:
-            model = Model()
+            model = Model(file_name)
 
         if view is None:
             view = View(model)

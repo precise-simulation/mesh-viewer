@@ -12,7 +12,7 @@ Mesh Viewer
 # Installation and Use
 
 Simply downloading and running the corresponding Python scripts should
-start both the GUI and application.
+start both the GUI and application
 
     python meshviewer_mpl_tk.py
 
@@ -20,15 +20,22 @@ or
 
     python meshviewer_plotly_cef_tk.py
 
+[Releases](https://github.com/precise-simulation/mesh-viewer/releases)
+as stand-alone executables are available, and can be built using
+_Pyinstaller_ and the [build/build-exe.py](https://github.com/precise-simulation/mesh-viewer/blob/master/build/build-exe.py)
+script.
+
 # Dependencies
 
 Python with the following libraries:
 
+- The _Tkinter_ Graphical User Interface (GUI) framework (usually installed with Python)
 - [matplotlib](https://matplotlib.org) for the matplotlib version
-- [cefpython](https://github.com/cztomczak/cefpython) for the plotly version (as well as internet connection to download the plotly javascript library)
-- Optionally [numpy](https://numpy.org) and [numpy-stl](https://github.com/WoLpH/numpy-stl) for reading binary STL format
+- [cefpython](https://github.com/cztomczak/cefpython) for the plotly
+  version (as well as internet connection to download the
+  [plotly.js](https://github.com/plotly/plotly.js) library)
 
-# Notes
+# Note
 
 This is just a simple prototype/proof-of-concept and not intended to
 be a full fledged application. If you are interested in custom CAE and
