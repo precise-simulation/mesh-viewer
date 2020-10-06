@@ -25,7 +25,16 @@ from cefpython3 import cefpython as cef
 import ctypes
 import sys
 import os
+if os.name == "nt":
+    from ctypes import windll, pointer, wintypes
+    try:
+        windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        pass  # this will fail on Windows Server and maybe early Windows
+
 import platform
+
+import numpy as np
 
 g_multi_threaded = True
 if not platform.system() == "Windows":
@@ -41,7 +50,7 @@ class Model():
             # Define unit cube.
             vertices = [[0,0,0], [1,0,0], [1,1,0], [0,1,0],
                         [0,0,1], [1,0,1], [1,1,1], [0,1,1]]
-            faces = [[1,2,3], [1,3,4], [1,2,6], [1,6,5], [2,3,7], [2,7,6], \
+            faces = [[1,2,3], [1,3,4], [1,2,6], [1,6,5], [2,3,7], [2,7,6],
                      [3,4,8], [3,8,7], [4,1,5], [4,5,8], [5,6,7], [5,7,8]]
             data = Mesh(vertices, faces)
 
@@ -340,7 +349,7 @@ class Controller():
         root.protocol("WM_DELETE_WINDOW", self.exit)
 
         if view is None:
-            view = View(None, root)
+            view = View()
 
         f1 = ttk.Frame(root)
         f1.pack(side=tk.TOP, anchor=tk.W)

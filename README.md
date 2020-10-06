@@ -1,11 +1,11 @@
 Mesh Viewer
 -----------
 
-**Mesh Viewer** is a simple STL/OBJ CAD geometry viewer prototype
-  using the Tkinter GUI framework with a Model View Controller (MVC)
-  design, and either Matplotlib/mplot3d or
-  [Plotly](https://www.featool.com/web-plots)/WebGL visualization
-  backends.
+**Mesh Viewer** is a simple STL/OBJ CAD geometry viewer prototypes
+using the Tkinter GUI framework with a Model View Controller (MVC)
+design, and either Matplotlib/mplot3d, vispy/OpenGL,
+[Plotly](https://www.featool.com/web-plots)/WebGL visualization
+backends.
 
 ![Mesh Viewer screenshot](https://raw.githubusercontent.com/precise-simulation/mesh-viewer/master/meshviewer-screenshot.jpg)
 
@@ -20,10 +20,14 @@ or
 
     python meshviewer_plotly_cef_tk.py
 
+or
+
+    python meshviewer_vispy_tk.py
+
 [Releases](https://github.com/precise-simulation/mesh-viewer/releases)
 as stand-alone executables are available, and can be built using
-_Pyinstaller_ and the [build/build.py](https://github.com/precise-simulation/mesh-viewer/blob/master/build/build-exe.py)
-script.
+_Pyinstaller_ and the [build](https://github.com/precise-simulation/mesh-viewer/tree/master/build)
+scripts.
 
 # Dependencies
 
@@ -34,6 +38,8 @@ Python with the following libraries:
 - [cefpython](https://github.com/cztomczak/cefpython) for the plotly
   version (as well as internet connection to download the
   [plotly.js](https://github.com/plotly/plotly.js) library)
+- [vispy](https://github.com/vispy/vispy) for the vispy version (with
+  the _tk backend) and [pyopengltk](https://github.com/jonwright/pyopengltk)
 
 # Note
 

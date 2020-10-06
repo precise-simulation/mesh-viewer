@@ -1,4 +1,4 @@
-"""STL/OBJ Python Mesh Viewer prototype with Matplotlib/Tkinter
+"""STL/OBJ Python Mesh Viewer prototype with Vispy/OpenGL/Tkinter
 using a Model View Controller (MVC) design.
 
 This is just a simple prototype/proof-of-concept and not intended to
@@ -21,15 +21,16 @@ import tkinter.ttk as ttk
 import tkinter.font as tkfont
 from tkinter.filedialog import askopenfilename
 
-import matplotlib
-matplotlib.use("TkAgg")
-from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
-from matplotlib.figure import Figure
-from mpl_toolkits import mplot3d
+import vispy
+import vispy.scene
+# import vispy.visuals
+vispy.use(app='tkinter')
+
+import numpy as np
 
 import sys
 import os
-if os.name == "nt":
+if os.name == 'nt':
     from ctypes import windll, pointer, wintypes
     try:
         windll.shcore.SetProcessDpiAwareness(1)
@@ -44,10 +45,11 @@ class Model():
         self.data = []
         if file_name is None:
             # Define unit cube.
-            vertices = [[0,0,0], [1,0,0], [1,1,0], [0,1,0],
-                        [0,0,1], [1,0,1], [1,1,1], [0,1,1]]
-            faces = [[1,2,3,4], [1,2,6,5], [2,3,7,6], [3,4,8,7], [4,1,5,8], [5,6,7,8]]
-            data = Mesh(vertices, faces)
+            vertices = [[0,1,0], [1,1,0], [1,0,0], [0,0,0],
+                        [1,0,1], [0,0,1], [1,1,1], [0,1,1]]
+            faces = [[0,1,2], [0,2,3], [2,4,5], [2,5,3], [4,2,1], [4,1,6],
+                     [6,1,0], [6,0,7], [3,5,7], [3,7,0], [6,5,4], [6,7,5]]
+            data = Mesh(np.asarray(vertices, dtype='float32'), np.asarray(faces,dtype='uint32'))
 
             self.data = [data]
         else:
@@ -59,96 +61,7 @@ class Model():
     def load_file(self, file_name):
         '''Load mesh from file
         '''
-        if file_name.lower().endswith(('.stl','.stla','.stlb')):
-            self.load_stl(file_name)
-
-        elif file_name.lower().endswith('.obj'):
-            self.load_obj(file_name)
-
-    def load_stl(self, file_name):
-        '''Load STL CAD file
-        '''
-        try:
-            with open(file_name, 'r') as f:
-                data = f.read()
-
-            self.load_stl_ascii(data)
-
-        except:
-            self.load_stl_binary(file_name)
-
-    def load_stl_ascii(self, data):
-        '''Load ASCII STL CAD file
-        '''
-        vertices = []
-        faces = []
-        v = []
-        for i, line in enumerate(data.splitlines()):
-            if i == 0 and line.strip() != 'solid':
-                raise ValueError('Not valid ASCII STL file.')
-
-            line_data = line.split()
-
-            if line_data[0]=='facet':
-                v = []
-
-            elif line_data[0]=='vertex':
-                v.append([float(line_data[1]), float(line_data[2]), float(line_data[3])])
-
-            elif line_data[0]=='endloop':
-                if len(v)==3:
-                    vertices.extend(v)
-                    ind = 3*len(faces)+1
-                    faces.append([ind, ind+1, ind+2])
-
-        self.data.append(Mesh(vertices, faces))
-
-    def load_stl_binary(self, file_name):
-        '''Load binary STL CAD file
-        '''
-        from struct import unpack
-        vertices = []
-        faces = []
-        with open(file_name, 'rb') as f:
-            header = f.read(80)
-            # name = header.strip()
-            n_tri = unpack('<I', f.read(4))[0]
-            for i in range(n_tri):
-                _normals = f.read(3*4)
-                for j in range(3):
-                    x = unpack('<f', f.read(4))[0]
-                    y = unpack('<f', f.read(4))[0]
-                    z = unpack('<f', f.read(4))[0]
-                    vertices.append([x, y, z])
-
-                j = 3*i + 1
-                faces.append([j, j+1, j+2])
-                _attr = f.read(2)
-
-        self.data.append(Mesh(vertices, faces))
-
-    def load_obj(self, file_name):
-        '''Load ASCII Wavefront OBJ CAD file
-        '''
-        with open(file_name, 'r') as f:
-            data = f.read()
-
-        vertices = []
-        faces = []
-        for line in data.splitlines():
-            line_data = line.split()
-            if line_data:
-                if line_data[0] == 'v':
-                    v = [float(line_data[1]), float(line_data[2]), float(line_data[3])]
-                    vertices.append(v)
-                elif line_data[0] == 'f':
-                    face = []
-                    for i in range(1, len(line_data)):
-                        s = line_data[i].replace('//','/').split('/')
-                        face.append(int(s[0]))
-
-                    faces.append(face)
-
+        vertices, faces, _, _ = vispy.io.read_mesh(file_name)
         self.data.append(Mesh(vertices, faces))
 
     def get_bounding_box(self):
@@ -172,7 +85,7 @@ class Mesh():
     def get_vertices(self):
         vertices = []
         for face in self.faces:
-            vertices.append([self.vertices[ivt-1] for ivt in face])
+            vertices.append([self.vertices[ivt] for ivt in face])
 
         return vertices
 
@@ -208,24 +121,15 @@ class View():
         if model is None:
             model = Model()
         self.model = model
-
-        figure = Figure()
-        axes = mplot3d.Axes3D(figure)
-
-        self.figure = figure
-        self.axes = axes
         self.canvas = None
-        self.toolbar = None
-
-        self.plot()
+        self.vpview = None
 
     def clear(self):
-        self.axes.clear()
-        self.update()
+        if self.vpview is not None:
+            self.vpview.parent = None
 
-    def update(self):
-        if self.canvas is not None:
-            self.canvas.draw()
+        self.vpview = self.canvas.central_widget.add_view(bgcolor='white')
+        # vispy.scene.visuals.XYZAxis(parent=self.vpview.scene)
 
     def plot(self, types="solid + wireframe"):
         self.clear()
@@ -236,42 +140,48 @@ class View():
             for type in types:
 
                 if type=="solid":
-                    self.axes.add_collection3d(mplot3d.art3d.Poly3DCollection(mesh.get_vertices()))
+                    msh = vispy.scene.visuals.Mesh(vertices=mesh.vertices, \
+                                                   shading='smooth', faces=mesh.faces)
+                    self.vpview.add(msh)
 
                 elif type=="wireframe":
-                    self.axes.add_collection3d(mplot3d.art3d.Line3DCollection(mesh.get_line_segments(),
-                                                                              colors=(0.1, 0.1, 0.35, 1)))
+                    n_faces = len(mesh.faces)
+                    ix = np.tile([0, 1, 1, 2, 2, 0], n_faces) + \
+                        np.repeat(np.arange(0, 3*n_faces, 3), 6)
+                    edges = mesh.faces.reshape(-1)[ix]
+                    edg = vispy.scene.visuals.Line(pos=mesh.vertices[edges], connect="segments")
+                    self.vpview.add(edg)
 
                 else:
                     # Unknown plot type
                     return None
 
-        if len(self.model.data) >= 1:
-            self.axes.auto_scale_xyz(*self.model.get_bounding_box())
-            self.update()
+        self.vpview.camera = vispy.scene.TurntableCamera(parent=self.vpview.scene)
 
     def xy(self):
-        self.axes.view_init(elev=90, azim=-90)
-        self.update()
+        self.vpview.camera.elevation = 90
+        self.vpview.camera.azimuth = -90
+        self.vpview.camera.roll = 0
 
     def xz(self):
-        self.axes.view_init(elev=0, azim=-90)
-        self.update()
+        self.vpview.camera.elevation = 0
+        self.vpview.camera.azimuth = -90
+        self.vpview.camera.roll = 0
 
     def yz(self):
-        self.axes.view_init(elev=0, azim=0)
-        self.update()
+        self.vpview.camera.elevation = 0
+        self.vpview.camera.azimuth = 0
+        self.vpview.camera.roll = 0
 
     def reset(self):
-        self.axes.view_init()
-        self.update()
-
+        self.vpview.camera.reset()
 
 class Controller():
 
     def __init__(self, view=None):
 
         root = tk.Tk()
+        root.geometry("600x550")
         root.title("Mesh Viewer")
 
         if view is None:
@@ -299,16 +209,11 @@ class Controller():
 
         [obj.pack(side=tk.LEFT, anchor=tk.W) for obj in toolbar]
 
-        canvas = FigureCanvasTkAgg(view.figure, root)
-        canvas.mpl_connect('button_press_event', view.axes._button_press)
-        canvas.mpl_connect('button_release_event', view.axes._button_release)
-        canvas.mpl_connect('motion_notify_event', view.axes._on_move)
-        canvas.draw()
-        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        mpl_toolbar = NavigationToolbar2Tk(canvas, root)
-        mpl_toolbar.update()
-        canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        canvas = vispy.scene.SceneCanvas(
+            keys='interactive', show=True, parent=root)
+        canvas.native.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        view.canvas = canvas
+        root.update_idletasks()
 
         menubar = tk.Menu( root )
         file_menu = tk.Menu(menubar, tearoff=0)
@@ -318,10 +223,9 @@ class Controller():
         root.config(menu=menubar)
 
         self.root = root
-        view.canvas = canvas
-        view.toolbar = mpl_toolbar
         self.view = view
         self.model = view.model
+        view.plot()
 
     def render(self):
         self.root.mainloop()
